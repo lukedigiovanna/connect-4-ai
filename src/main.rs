@@ -11,6 +11,7 @@ fn print_board(board: &Board) {
     clearscreen::clear().unwrap();
     println!("{}", "             CONNECT 4               ".reversed().blue().bold());
     for row in board.iter() {
+        println!("+---+---+---+---+---+---+---+---+---+");
         for value in row.iter() {
             print!("| ");
             if *value == 1 {
@@ -133,16 +134,17 @@ fn get_display_name(player: i32) -> ColoredString {
   }
 }
 
+// needs a decent terminal to not look horrible
 fn animate_board(board: &mut Board) {
-  let mut turn = 1;
-  for i in 0..HEIGHT {
-    for j in (i / 2)..(WIDTH - i / 2) {
-      place_piece(board, j, turn);
-      turn = turn % 2 + 1
+    let mut turn = 1;
+    for i in 0..HEIGHT {
+        for j in 0..WIDTH {
+        place_piece(board, j, turn);
+        turn = turn % 2 + 1;
+        print_board(board);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
-    print_board(board);
-    std::thread::sleep(std::time::Duration::from_millis(250));
-  }
 }
 
 fn calculate_pattern_score(pattern: &Vec<i32>, player: i32) -> i32 {
@@ -174,78 +176,101 @@ fn calculate_pattern_score(pattern: &Vec<i32>, player: i32) -> i32 {
 }
 
 fn calculate_score(board: &Board, player: i32) -> i32 {
-  // long patterns of the given player are good
-  let mut score = 0;
-  // collect patterns along each row
-  for i in 0..HEIGHT {
-    let mut pattern = Vec::new();
-    for j in 0..WIDTH {
-      pattern.push(board[i][j]);
+    // long patterns of the given player are good
+    let mut score = 0;
+    // collect patterns along each row
+    for i in 0..HEIGHT {
+        let mut pattern = Vec::new();
+        for j in 0..WIDTH {
+        pattern.push(board[i][j]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  for i in 0..WIDTH {
-    let mut pattern = Vec::new();
-    for j in 0..HEIGHT {
-      pattern.push(board[j][i]);
+    for i in 0..WIDTH {
+        let mut pattern = Vec::new();
+        for j in 0..HEIGHT {
+        pattern.push(board[j][i]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  for i in 0..HEIGHT {
-    let mut pattern = Vec::new();
-    for j in 0..(i + 1) {
-      pattern.push(board[HEIGHT - 1 - i + j][j]);
+    for i in 0..HEIGHT {
+        let mut pattern = Vec::new();
+        for j in 0..(i + 1) {
+        pattern.push(board[HEIGHT - 1 - i + j][j]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  for i in 0..HEIGHT {
-    let mut pattern = Vec::new();
-    for j in 0..(i + 1) {
-      pattern.push(board[HEIGHT - 1 - i + j][WIDTH - 1 - j]);
+    for i in 0..HEIGHT {
+        let mut pattern = Vec::new();
+        for j in 0..(i + 1) {
+        pattern.push(board[HEIGHT - 1 - i + j][WIDTH - 1 - j]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  for i in 1..WIDTH {
-    let mut pattern = Vec::new();
-    for j in 0..std::cmp::min(WIDTH - i, HEIGHT) {
-      pattern.push(board[j][i + j]);
+    for i in 1..WIDTH {
+        let mut pattern = Vec::new();
+        for j in 0..std::cmp::min(WIDTH - i, HEIGHT) {
+        pattern.push(board[j][i + j]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  for i in 1..WIDTH {
-    let mut pattern = Vec::new();
-    for j in 0..std::cmp::min(WIDTH - i, HEIGHT) {
-      pattern.push(board[j][WIDTH - 1 - (i + j)]);
+    for i in 1..WIDTH {
+        let mut pattern = Vec::new();
+        for j in 0..std::cmp::min(WIDTH - i, HEIGHT) {
+        pattern.push(board[j][WIDTH - 1 - (i + j)]);
+        }
+        score += calculate_pattern_score(&pattern, player);
     }
-    score += calculate_pattern_score(&pattern, player);
-  }
-  
-  score
+    
+    score
 }
 
-// fn get_available_moves(board: &Board) -> Vec<usize> {
-//   let mut vec = Vec::new();
-//   for i in 0..WIDTH {
-//     if board[0][i] == 0 {
-//       vec.push(i);
-//     }
-//   }
-//   vec
-// }
+fn game_score(board: &Board) -> i32 {
+    calculate_score(board, 2)
+}
 
-// returns the column that the player should play in
-fn minmax(board: &Board, player: i32, depth: i32) -> i32 {
-  let mut boardCopy = board.to_owned();
-  place_piece(&mut boardCopy, 5);
-  println!("{}", boardCopy[6][4]);
-  let mut max = -9999;
-  let mut maxPos = 0;
-  for i in 0..WIDTH {
-    if board[0][i] != 0 {
-      
+// returns the score and column to play that maximizes the score
+fn minmax(board: &Board, maximizing: bool, depth: i32, mut alpha: i32, mut beta: i32) -> [i32; 2] {
+    if depth == 0 {
+        return [game_score(board), 0];
     }
-  }
-  max
+    let player = if maximizing { 2 } else { 1 };
+    if maximizing {
+        let mut max = [-9999, 0];
+        for i in 0..WIDTH {
+            if board[0][i] == 0 { // if there is space left in this column
+                let mut boardCopy = board.to_owned();
+                place_piece(&mut boardCopy, i, player);
+                let [score, _] = minmax(&boardCopy, false, depth - 1, alpha, beta);
+                if score > max[0] {
+                    max = [score, i.try_into().unwrap()];
+                }
+                alpha = std::cmp::max(alpha, score);
+                if beta <= alpha {
+                    break;
+                }
+            }
+        }
+        return max;
+    }
+    else {
+        let mut min = [9999, 0];
+        for i in 0..WIDTH {
+            if board[0][i] == 0 {
+                let mut boardCopy = board.to_owned();
+                place_piece(&mut boardCopy, i, player);
+                let [score, _] = minmax(&boardCopy, true, depth - 1, alpha, beta);
+                if score < min[0] {
+                    min = [score, i.try_into().unwrap()];
+                }
+                beta = std::cmp::min(beta, score);
+                if beta <= alpha {
+                    break;
+                }
+            }
+        }
+        return min;
+    }
 }
 
 fn main() {
@@ -260,32 +285,42 @@ fn main() {
         println!("{}'s turn: ", get_display_name(turn));
 
         if turn == 2 {
-          minmax(&board, turn, 1);
-        }
-        
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Error reading line");
-
-        let trimmed = input.trim();
-        match trimmed.parse::<usize>() {
-            Ok(i) => {
-                if i < 1 || i > WIDTH {
-                  println!("Enter a valid column");
-                }
-                else {
-                  place_piece(&mut board, i - 1, turn);
-                  if check_winner(&board, turn) {
-                    print_board(&board);
-                    println!("{} Won!", get_display_name(turn));
-                    game_over = true;
-                  }
-                  turn = turn % 2 + 1;
-                }
+            println!("Calculating...");
+            let [score, pos] = minmax(&board, true, 6, -9999, 9999);
+            // std::thread::sleep(std::time::Duration::from_millis(500));
+            place_piece(&mut board, pos.try_into().unwrap(), turn);
+            if check_winner(&board, turn) {
+                print_board(&board);
+                println!("{} Won!", get_display_name(turn));
+                game_over = true;
             }
-            Err(..) => {
-                println!("Enter a valid column");
+            turn = turn % 2 + 1;
+        }
+        else {
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Error reading line");
+
+            let trimmed = input.trim();
+            match trimmed.parse::<usize>() {
+                Ok(i) => {
+                    if i < 1 || i > WIDTH {
+                        println!("Enter a valid column");
+                    }
+                    else {
+                        place_piece(&mut board, i - 1, turn);
+                        if check_winner(&board, turn) {
+                            print_board(&board);
+                            println!("{} Won!", get_display_name(turn));
+                            game_over = true;
+                        }
+                        turn = turn % 2 + 1;
+                    }
+                }
+                Err(..) => {
+                    println!("Enter a valid column");
+                }
             }
         }
     }
