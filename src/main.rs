@@ -6,22 +6,35 @@ const HEIGHT: usize = 7;
 
 type Board = [[i32; WIDTH]; HEIGHT];
 
-fn print_board(board: &Board) {
+fn print_board(board: &Board, positions: &Option<Vec<(usize, usize)>>) {
     // print!("{}[2J", 27 as char);
     clearscreen::clear().unwrap();
     println!("{}", "             CONNECT 4               ".reversed().blue().bold());
-    for row in board.iter() {
+    for i in 0..HEIGHT {
         println!("+---+---+---+---+---+---+---+---+---+");
-        for value in row.iter() {
+        for j in 0..WIDTH {
             print!("| ");
-            if *value == 1 {
-                print!("{}", "●".red().bold());
-            } else if *value == 2 {
-                print!("{}", "●".yellow().bold());
-            }
-            else {
+            let value = board[i][j];
+            if value == 0 {
                 print!(" ");
             }
+            else {
+                let mut piece = "●".bold();
+                if value == 1 {
+                    piece = piece.red();
+                }
+                else {
+                    piece = piece.yellow();
+                }
+                if !(*positions).is_none() {
+                    // i.e. there are positions to check
+                    if positions.as_ref().unwrap().iter().any(|p| *p == (i, j)) {
+                        piece = piece.reversed();
+                    }
+                }
+                print!("{}", piece);
+            }
+            
             print!(" ");
         }
         println!("|");
@@ -45,85 +58,97 @@ fn place_piece(board: &mut Board, column: usize, piece: i32) -> bool {
     true
 }
 
-fn check_winner_at_position(board: &Board, row: usize, col: usize) -> bool {
-  let piece = board[row][col];
-  let mut won = true;
-  // first check if this position starts a win from left to right
-  if col <= WIDTH - 4 { // which is only possible if we are far enough to the left
-    for i in 1..4 {
-      if board[row][col + i] != piece {
-        won = false;
-        break;
-      } 
+fn check_winner_at_position(board: &Board, row: usize, col: usize) -> (bool, Option<Vec<(usize, usize)>>) {
+    let piece = board[row][col];
+    let mut won = true;
+    let mut positions = Vec::new();
+    positions.push((row, col));
+    // first check if this position starts a win from left to right
+    if col <= WIDTH - 4 { // which is only possible if we are far enough to the left
+        for i in 1..4 {
+            if board[row][col + i] != piece {
+                won = false;
+                break;
+            }
+            positions.push((row, col + i));
+        }
     }
-  }
-  else {
-    won = false;
-  }
-  if won {
-    return true;
-  }
-  won = true;
-  // now check top down
-  if row <= HEIGHT - 4 {
-    for i in 1..4 {
-      if board[row + i][col] != piece {
+    else {
         won = false;
-        break;
-      }
     }
-  }
-  else {
-    won = false;
-  }
-  if won {
-    return true;
-  }
-  won = true;
-  // check for a diagonal to the right
-  if row <= HEIGHT - 4 && col <= WIDTH - 4 {
-    for i in 1..4 {
-      if board[row + i][col + i] != piece {
+    if won {
+        return (true, Some(positions));
+    }
+    won = true;
+    positions = Vec::new();
+    positions.push((row, col));
+    // now check top down
+    if row <= HEIGHT - 4 {
+        for i in 1..4 {
+            if board[row + i][col] != piece {
+                won = false;
+                break;
+            }
+            positions.push((row + i, col));
+        }
+    }
+    else {
         won = false;
-        break;
-      }
     }
-  }
-  else {
-    won = false;
-  }
-  if won {
-    return true;
-  }
-  won = true;
-  // finally check a diagonal to the left
-  if row <= HEIGHT - 4 && col >= 3 {
-    for i in 1..4 {
-      if board[row + i][col - i] != piece {
+    if won {
+        return (true, Some(positions));
+    }
+    won = true;
+    positions = Vec::new();
+    positions.push((row, col));
+    // check for a diagonal to the right
+    if row <= HEIGHT - 4 && col <= WIDTH - 4 {
+        for i in 1..4 {
+            if board[row + i][col + i] != piece {
+                won = false;
+                break;
+            }
+            positions.push((row + i, col + i));
+        }
+    }
+    else {
         won = false;
-        break;
-      }
     }
-  }
-  else {
-    won = false;
-  }
-  if won {
-    return true;
-  }
-  false
+    if won {
+        return (true, Some(positions));
+    }
+    won = true;
+    positions = Vec::new();
+    positions.push((row, col));
+    // finally check a diagonal to the left
+    if row <= HEIGHT - 4 && col >= 3 {
+        for i in 1..4 {
+            if board[row + i][col - i] != piece {
+                won = false;
+                break;
+            }
+            positions.push((row + i, col - i));
+        }
+    }
+    else {
+        won = false;
+    }
+    if won {
+        return (true, Some(positions));
+    }
+    (false, None)
 }
 
-fn check_winner(board: &Board, piece: i32) -> bool {
-  for i in 0..HEIGHT {
-    for j in 0..WIDTH {
-      if board[i][j] == piece && check_winner_at_position(board, i, j) {
-        println!("{} {}", i, j);
-        return true;
-      }
+fn check_winner(board: &Board, piece: i32) -> (bool, Option<Vec<(usize, usize)>>) {
+    for i in 0..HEIGHT {
+        for j in 0..WIDTH {
+            let result = check_winner_at_position(board, i, j);
+            if board[i][j] == piece && result.0 {
+                return result;
+            }
+        }
     }
-  }
-  false
+    (false, None)
 }
 
 fn get_display_name(player: i32) -> ColoredString {
@@ -141,7 +166,7 @@ fn animate_board(board: &mut Board) {
         for j in 0..WIDTH {
         place_piece(board, j, turn);
         turn = turn % 2 + 1;
-        print_board(board);
+        print_board(board, &None);
         std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
@@ -154,7 +179,7 @@ fn calculate_pattern_score(pattern: &Vec<i32>, player: i32) -> i32 {
   let mut scale = 0;
   for p in pattern.iter() {
     if *p == last {
-      cur *= 2;
+      cur = std::cmp::min(cur * 2, 8);
     }
     else {
       rank += cur * scale;
@@ -234,7 +259,11 @@ fn minmax(board: &Board, maximizing: bool, depth: i32, mut alpha: i32, mut beta:
     if depth == 0 {
         return [game_score(board), 0];
     }
-    let player = if maximizing { 2 } else { 1 };
+    let player = if maximizing { 2 } else { 1 };    
+    let opposing_player = player % 2 + 1;
+    if check_winner(board, opposing_player).0 {
+        return [game_score(board) * 10, 0];
+    }
     if maximizing {
         let mut max = [-9999, 0];
         for i in 0..WIDTH {
@@ -279,7 +308,7 @@ fn main() {
     let mut game_over = false;
     // animate_board(&mut board);
     while !game_over {
-        print_board(&board);
+        print_board(&board, &None);
         // calculate score
         println!("{}: {} | {}: {}", get_display_name(1), calculate_score(&board, 1), get_display_name(2), calculate_score(&board, 2));
         println!("{}'s turn: ", get_display_name(turn));
@@ -289,8 +318,9 @@ fn main() {
             let [score, pos] = minmax(&board, true, 6, -9999, 9999);
             // std::thread::sleep(std::time::Duration::from_millis(500));
             place_piece(&mut board, pos.try_into().unwrap(), turn);
-            if check_winner(&board, turn) {
-                print_board(&board);
+            let (did_win, positions) = check_winner(&board, turn);
+            if did_win {
+                print_board(&board, &positions);
                 println!("{} Won!", get_display_name(turn));
                 game_over = true;
             }
@@ -310,8 +340,9 @@ fn main() {
                     }
                     else {
                         place_piece(&mut board, i - 1, turn);
-                        if check_winner(&board, turn) {
-                            print_board(&board);
+                        let (did_win, positions) = check_winner(&board, turn);
+                        if did_win {
+                            print_board(&board, &positions);
                             println!("{} Won!", get_display_name(turn));
                             game_over = true;
                         }
